@@ -25,11 +25,26 @@ use CRM_Eventmessages_ExtensionUtil as E;
 function eventmessages_civicrm_config(&$config)
 {
     _eventmessages_civix_civicrm_config($config);
+    $dispatcher = Civi::dispatcher();
 
-    // REMOTEEVENT.GET filters
-    Civi::dispatcher()->addListener(
+    // subscribe to RemoteEvent.get to strip custom data
+    $dispatcher->removeListener(  // 'remove' to make sure this is only registered once
         'civi.remoteevent.get.result',
         ['CRM_Eventmessages_Logic', 'stripEventMessageData']
+    );
+    $dispatcher->addListener(
+        'civi.remoteevent.get.result',
+        ['CRM_Eventmessages_Logic', 'stripEventMessageData']
+    );
+
+    // subscribe to SchduledReminders to add our tokens there as well
+    $dispatcher->removeListener(  // 'remove' to make sure this is only registered once
+        'civi.actionSchedule.prepareMailingQuery',
+        ['CRM_Eventmessages_ScheduledReminder', 'injectTokens']
+    );
+    $dispatcher->addListener(
+        'civi.actionSchedule.prepareMailingQuery',
+        ['CRM_Eventmessages_ScheduledReminder', 'injectTokens']
     );
 }
 
@@ -256,6 +271,7 @@ function eventmessages_civicrm_copy($objectName, &$object)
                     // this should be it:
                     $original_event_id = $call['args'][0];
                     CRM_Eventmessages_Logic::copyRules($original_event_id, $new_event_id);
+                    break;
                 }
             }
         }
