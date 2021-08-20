@@ -18,6 +18,12 @@ require_once 'eventmessages.civix.php';
 use CRM_Eventmessages_ExtensionUtil as E;
 
 /**
+ * defines whether to use CALLBACKS to catch a participant change event,
+ * see https://github.com/systopia/de.systopia.eventmessages/issues/9
+ */
+const EVENTMESSAGES_USE_POST_CALLBACK = true;
+
+/**
  * Implements hook_civicrm_config().
  *
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_config/
@@ -168,7 +174,7 @@ function eventmessages_civicrm_entityTypes(&$entityTypes)
 }
 
 /**
- * Implements hook_civicrm_thems().
+ * Implements hook_civicrm_themes().
  */
 function eventmessages_civicrm_themes(&$themes)
 {
@@ -205,8 +211,20 @@ function eventmessages_civicrm_pre($op, $objectName, $id, &$params)
 function eventmessages_civicrm_post($op, $objectName, $objectId, &$objectRef)
 {
     if (($op == 'edit' || $op == 'create') && $objectName == 'Participant') {
-        CRM_Eventmessages_Logic::recordPost($objectId, $objectRef);
+        if (EVENTMESSAGES_USE_POST_CALLBACK && CRM_Core_Transaction::isActive()) {
+            // the transaction is still active, so not all data has been written
+            CRM_Core_Transaction::addCallback(CRM_Core_Transaction::PHASE_POST_COMMIT, '_eventmessages_participant_updated_callback', [$objectId, $objectRef]);
+        } else {
+            _eventmessages_participant_updated_callback($objectId, $objectRef);
+        }
     }
+}
+
+/**
+ * Helper / callback function for participant post events (see eventmessages_civicrm_post)
+ */
+function _eventmessages_participant_updated_callback($objectId, $objectRef) {
+    CRM_Eventmessages_Logic::recordPost($objectId, $objectRef);
 }
 
 /**
