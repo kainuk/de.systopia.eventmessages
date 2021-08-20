@@ -130,7 +130,7 @@ class CRM_Eventmessages_SendMail
                         if ($call['class'] == 'CRM_Event_BAO_Event' && $call['function'] == 'sendMail') {
                             $participant_id = $call['args'][2];
                             if (CRM_Eventmessages_SendMail::suppressSystemEventMailsForParticipant($participant_id)) {
-                                Civi::log()->debug("EventMessages: CRM_Event_BAO_Event::sendMail detected!");
+                                #Civi::log()->debug("EventMessages: CRM_Event_BAO_Event::sendMail detected!");
                                 $this->logDroppedMail($recipients, $headers, $body);
                                 return; // don't send
                             }
@@ -142,7 +142,7 @@ class CRM_Eventmessages_SendMail
                         if ($call['class'] == 'CRM_Event_Form_Participant' && $call['function'] == 'submit') {
                             $participant_id = $call['object']->_id;
                             if (CRM_Eventmessages_SendMail::suppressSystemEventMailsForParticipant($participant_id)) {
-                                Civi::log()->debug("EventMessages: CRM_Event_Form_Participant::submit detected!");
+                                #Civi::log()->debug("EventMessages: CRM_Event_Form_Participant::submit detected!");
                                 $this->logDroppedMail($recipients, $headers, $body);
                                 return; // don't send
                             }
@@ -194,9 +194,8 @@ class CRM_Eventmessages_SendMail
                     FROM civicrm_value_event_messages_settings settings
                     WHERE settings.entity_id = {$event_id}");
 
-                // TODO: remove logging
-                Civi::log()->debug("EventMessages: suppress system messages for event [{$event_id}]: " .
-                                   ($cached_event_results[$event_id] ? 'yes' : 'no'));
+//                Civi::log()->debug("EventMessages: suppress system messages for event [{$event_id}]: " .
+//                                   ($cached_event_results[$event_id] ? 'yes' : 'no'));
             }
             return $cached_event_results[$event_id];
         }
@@ -212,15 +211,12 @@ class CRM_Eventmessages_SendMail
                        ON settings.entity_id = participant.event_id
                 WHERE participant.id = {$participant_id}");
 
-                // TODO: remove logging
-                Civi::log()->debug("EventMessages: suppress system messages for participant [{$participant_id}]: " .
-                                   ($cached_participant_results[$participant_id] ? 'yes' : 'no'));
+//                Civi::log()->debug("EventMessages: suppress system messages for participant [{$participant_id}]: " .
+//                                   ($cached_participant_results[$participant_id] ? 'yes' : 'no'));
             }
             return $cached_participant_results[$participant_id];
         }
 
-        // TODO: remove logging
-        Civi::log()->debug("EventMessages: suppression of system messages unknown, no IDs submitted");
         return false;
     }
 
