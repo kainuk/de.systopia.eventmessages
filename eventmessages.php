@@ -21,7 +21,7 @@ use CRM_Eventmessages_ExtensionUtil as E;
  * defines whether to use CALLBACKS to catch a participant change event,
  * see https://github.com/systopia/de.systopia.eventmessages/issues/9
  */
-const EVENTMESSAGES_USE_POST_CALLBACK = true;
+const EVENTMESSAGES_EXPERIMENTAL_CUSTOM_FIELD_CALLBACK = true;
 
 /**
  * Implements hook_civicrm_config().
@@ -211,20 +211,23 @@ function eventmessages_civicrm_pre($op, $objectName, $id, &$params)
 function eventmessages_civicrm_post($op, $objectName, $objectId, &$objectRef)
 {
     if (($op == 'edit' || $op == 'create') && $objectName == 'Participant') {
-        if (EVENTMESSAGES_USE_POST_CALLBACK && CRM_Core_Transaction::isActive()) {
-            // the transaction is still active, so not all data has been written
-            CRM_Core_Transaction::addCallback(CRM_Core_Transaction::PHASE_POST_COMMIT, '_eventmessages_participant_updated_callback', [$objectId, $objectRef]);
+        if (EVENTMESSAGES_EXPERIMENTAL_CUSTOM_FIELD_CALLBACK
+             && CRM_Eventmessages_Logic::containsCustomFields($objectRef)) {
+            // in this case we'll let the custom post hook handle it, see eventmessages_civicrm_custom below
+            CRM_Eventmessages_Logic::scheduleDeferredPostProcessing($objectId, $objectRef);
         } else {
-            _eventmessages_participant_updated_callback($objectId, $objectRef);
+            CRM_Eventmessages_Logic::recordPost($objectId, $objectRef);
         }
     }
 }
 
 /**
- * Helper / callback function for participant post events (see eventmessages_civicrm_post)
+ * Monitor custom post hooks (for participants) to trigger late postProcessing
  */
-function _eventmessages_participant_updated_callback($objectId, $objectRef) {
-    CRM_Eventmessages_Logic::recordPost($objectId, $objectRef);
+function eventmessages_civicrm_custom( $op, $groupID, $entityID, &$params ) {
+    if (($op == 'edit' || $op == 'create') && EVENTMESSAGES_EXPERIMENTAL_CUSTOM_FIELD_CALLBACK) {
+        CRM_Eventmessages_Logic::triggerDeferredPostProcessing($entityID, $groupID);
+    }
 }
 
 /**

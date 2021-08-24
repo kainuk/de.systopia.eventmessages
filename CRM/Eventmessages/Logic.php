@@ -519,4 +519,68 @@ class CRM_Eventmessages_Logic
 
         return $message_tokens;
     }
+
+
+    /***
+     * DEFERRED TRIGGERING - this is needed if the participant data contains custom fields,
+     *  which are not available with the post_hook
+     */
+
+    /** @var array list of participant ID => reference */
+    protected static $deferred_triggers = [];
+
+
+    /**
+     * Check if the given participant post hook call contains custom fields,
+     *   in which case we have to be triggered by the custom post hook
+     *
+     * @param $participant_post_hook_reference
+     */
+    public static function containsCustomFields($participant_post_hook_reference)
+    {
+        // check if there are custom_ fields in the request
+        foreach ($_REQUEST as $key => $value) {
+            if (substr($key, 0, 7) == 'custom_') {
+                return true;
+            }
+        }
+
+        // todo: the above might not be enough...
+        return false;
+    }
+
+    /**
+     * Schedule deferred post-processing, needed to include custom field changes
+     * @param $participant_id
+     * @param $participant_reference
+     */
+    public static function scheduleDeferredPostProcessing($participant_id, $participant_reference)
+    {
+        // just store it
+        self::$deferred_triggers[$participant_id] = $participant_reference;
+    }
+
+    /**
+     * See if there's an open frame for the given ID and trigger the postprocessing
+     *
+     * @param $participant_id
+     */
+    public static function triggerDeferredPostProcessing($participant_id, $custom_group_id)
+    {
+        $custom_group_id = (int) $custom_group_id;
+        if ($custom_group_id && isset(self::$deferred_triggers[$participant_id])) {
+            // at this point we have to make sure, that the group really refers to a participant
+            $entity = CRM_Core_DAO::singleValueQuery("SELECT extends FROM civicrm_custom_group WHERE id = {$custom_group_id}");
+            if ($entity == 'Participant') {
+                // this all seems to be in order
+                $participant_object = self::$deferred_triggers[$participant_id];
+                unset(self::$deferred_triggers[$participant_id]);
+                self::recordPost($participant_id, $participant_object);
+            } else {
+                Civi::log()->debug("EventMessages: deferred post processing called on a non-participant");
+            }
+        } else {
+            Civi::log()->debug("EventMessages: unscheduled deferred post triggered");
+        }
+    }
 }
