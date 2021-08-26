@@ -474,7 +474,15 @@ class CRM_Eventmessages_Logic
      */
     public static function generateTokenEvent($participant_id, $contact_id = null, $event_data = null)
     {
+        // first: load participant
         $participant = civicrm_api3('Participant', 'getsingle', ['id' => $participant_id]);
+
+        // override recently submitted custom fields, see https://github.com/systopia/de.systopia.eventmessages/issues/9
+        if (defined('EVENT_MESSAGES_EXPERIMENTAL_SUBMIT_OVERRIDE')
+            && !empty(EVENT_MESSAGES_EXPERIMENTAL_SUBMIT_OVERRIDE)) {
+            self::overrideSubmittedCustomFields($participant);
+        }
+
         CRM_Eventmessages_CustomData::labelCustomFields($participant, 1, '__');
         // a small extension for the tokens
         $participant['participant_roles'] = is_array($participant['participant_role']) ?
@@ -518,5 +526,42 @@ class CRM_Eventmessages_Logic
         $message_tokens->setToken('contact', $contact);
 
         return $message_tokens;
+    }
+
+
+    /**
+     * Override all submitted request fields in the given entity data.
+     * The objective is here, to assume that these would be written out eventually,
+     * but haven't yet. Yes, we know about the post commit hooks and the post custom hooks,
+     * but none of those work here.
+     *
+     * @see https://github.com/systopia/de.systopia.eventmessages/issues/9
+     * @param array $entity_data
+     * @param string $entity_type
+     */
+    public static function overrideSubmittedCustomFields(&$entity_data, $entity_type = 'Participant')
+    {
+        // get the ids of all custom fields related to participants
+        static $participant_custom_field_keys = null;
+        if ($participant_custom_field_keys === null) {
+            $participant_custom_field_keys = [];
+            $result_ids = CRM_Core_DAO::executeQuery("
+                SELECT custom_field.id AS field_id
+                FROM civicrm_custom_field      custom_field
+                LEFT JOIN civicrm_custom_group custom_group
+                       ON custom_group.id = custom_field.custom_group_id
+                WHERE custom_group.extends = '{$entity_type}'
+                  AND custom_field.is_active = 1;")->fetchAll();
+            foreach ($result_ids as $custom_field) {
+                $participant_custom_field_keys[] = "custom_{$custom_field['field_id']}";
+            }
+        }
+
+        // now override all such custom fields from the submission
+        foreach ($participant_custom_field_keys as $custom_field_key) {
+            if (isset($_REQUEST[$custom_field_key])) {
+                $entity_data[$custom_field_key] = $_REQUEST[$custom_field_key];
+            }
+        }
     }
 }
